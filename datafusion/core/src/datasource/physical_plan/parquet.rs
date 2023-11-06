@@ -430,8 +430,7 @@ struct ParquetOpener {
 impl FileOpener for ParquetOpener {
     fn open(&self, file_meta: FileMeta) -> Result<FileOpenFuture> {
         let file_range = file_meta.range.clone();
-        // NOTE: this is hardcoded for local file system, if we are targeting
-        // an object storage, this won't work.
+        // The returned path will be relative to the root of the storage
         let mut input_file = file_meta.location().to_string();
 
         let file_metrics = ParquetFileMetrics::new(
