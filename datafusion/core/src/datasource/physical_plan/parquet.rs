@@ -430,16 +430,9 @@ struct ParquetOpener {
 impl FileOpener for ParquetOpener {
     fn open(&self, file_meta: FileMeta) -> Result<FileOpenFuture> {
         let file_range = file_meta.range.clone();
-        // When running against the parquet file located at the local file
-        // system, the returned path does not contain a starting `/`, prepend
-        // it here.
-        //
-        // doc: https://docs.rs/object_store/0.7.1/object_store/path/struct.Path.html
-        //
         // NOTE: this is hardcoded for local file system, if we are targeting
         // an object storage, this won't work.
         let mut input_file = file_meta.location().to_string();
-        input_file.insert(0, '/');
 
         let file_metrics = ParquetFileMetrics::new(
             self.partition_index,
