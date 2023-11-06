@@ -44,6 +44,7 @@ use crate::{
 
 use arrow::datatypes::{DataType, SchemaRef};
 use arrow::error::ArrowError;
+use arrow_schema::Schema;
 use datafusion_physical_expr::{
     EquivalenceProperties, LexOrdering, PhysicalExpr, PhysicalSortExpr,
 };
@@ -429,6 +430,8 @@ struct ParquetOpener {
 impl FileOpener for ParquetOpener {
     fn open(&self, file_meta: FileMeta) -> Result<FileOpenFuture> {
         let file_range = file_meta.range.clone();
+        // The returned path will be relative to the root of the storage
+        let mut input_file = file_meta.location().to_string();
 
         let file_metrics = ParquetFileMetrics::new(
             self.partition_index,
@@ -553,8 +556,19 @@ impl FileOpener for ParquetOpener {
             let adapted = stream
                 .map_err(|e| ArrowError::ExternalError(Box::new(e)))
                 .map(move |maybe_batch| {
-                    maybe_batch
-                        .and_then(|b| schema_mapping.map_batch(b).map_err(Into::into))
+                    maybe_batch.and_then(|b| {
+                        schema_mapping
+                            .map_batch(b)
+                            .map(|b| {
+                                // Provide the `input_file` info in the metadata
+                                let mut schema = Schema::clone(&b.schema());
+                                schema
+                                    .metadata
+                                    .insert("input_file".to_string(), input_file.clone());
+                                b.with_schema(Arc::new(schema)).expect("Won't go wrong because the new schema is a super set of the old one")
+                            })
+                            .map_err(Into::into)
+                    })
                 });
 
             Ok(adapted.boxed())
