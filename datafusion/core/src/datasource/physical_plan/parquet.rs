@@ -102,15 +102,52 @@ pub struct ParquetExec {
     metadata_size_hint: Option<usize>,
     /// Optional user defined parquet file reader factory
     parquet_file_reader_factory: Option<Arc<dyn ParquetFileReaderFactory>>,
+
+    /// `true` if the query uses the `_id` field (has this field in its projection)
+    /// then we don't need to manually add one
+    ///
+    /// For example, for a table with the following schema:
+    ///
+    /// ```ignore
+    /// -------------------
+    /// | _id | foo | bar |
+    /// -------------------
+    /// ```
+    ///
+    /// `SELECT * FROM table` would set this field to `true`, `SELECT foo
+    /// FROM table` will make it false.
+    involve_field_id: bool,
 }
 
 impl ParquetExec {
     /// Create a new Parquet reader execution plan provided file list and schema.
     pub fn new(
-        base_config: FileScanConfig,
+        mut base_config: FileScanConfig,
         predicate: Option<Arc<dyn PhysicalExpr>>,
         metadata_size_hint: Option<usize>,
     ) -> Self {
+        let (projected_schema, ..) = base_config.project();
+        let involve_field_id = projected_schema.index_of("_id").is_ok();
+
+        // The query does not involve the `_id` field, so we have to manually
+        // add it as it is needed in our use case
+        if !involve_field_id {
+            let file_schema = &base_config.file_schema;
+            let idx_of_id = file_schema
+                .index_of("_id")
+                .expect("the underlying Parquet file should contain an `_id` field");
+
+            if let Some(ref mut projection) = base_config.projection {
+                // NOTE:
+                // `projection` itself is an ordered list, e.g, `[0, 3]`, assume
+                // `idx_of_id` is 1, theoretically we should insert it between 0
+                // and 3 (`[0, 1, 3]`), but this will make `ProjectionExec.expr`
+                // unmatched, which would give us a wrongly-named RecordBatch,
+                // so we append it here `[0, 3, 1]`.
+                projection.push(idx_of_id);
+            }
+        }
+
         debug!("Creating ParquetExec, files: {:?}, projection {:?}, predicate: {:?}, limit: {:?}",
         base_config.file_groups, base_config.projection, predicate, base_config.limit);
 
@@ -165,6 +202,7 @@ impl ParquetExec {
             page_pruning_predicate,
             metadata_size_hint,
             parquet_file_reader_factory: None,
+            involve_field_id,
         }
     }
 
@@ -258,6 +296,13 @@ impl ParquetExec {
     fn enable_bloom_filter(&self, config_options: &ConfigOptions) -> bool {
         self.enable_bloom_filter
             .unwrap_or(config_options.execution.parquet.bloom_filter_enabled)
+    }
+
+    /// Return the `involve_field_id` field
+    ///
+    /// `true` when the query needs the `_id` field (has this field in its projection)
+    pub fn involve_field_id(&self) -> bool {
+        self.involve_field_id
     }
 }
 
@@ -431,7 +476,7 @@ impl FileOpener for ParquetOpener {
     fn open(&self, file_meta: FileMeta) -> Result<FileOpenFuture> {
         let file_range = file_meta.range.clone();
         // The returned path will be relative to the root of the storage
-        let mut input_file = file_meta.location().to_string();
+        let input_file = file_meta.location().to_string();
 
         let file_metrics = ParquetFileMetrics::new(
             self.partition_index,
