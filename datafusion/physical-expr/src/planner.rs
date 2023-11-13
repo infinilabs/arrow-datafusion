@@ -51,14 +51,22 @@ pub fn create_physical_expr(
     input_schema: &Schema,
     execution_props: &ExecutionProps,
 ) -> Result<Arc<dyn PhysicalExpr>> {
-    if input_schema.fields.len() != input_dfschema.fields().len() {
-        return internal_err!(
-            "create_physical_expr expected same number of fields, got \
+    if input_dfschema.field_with_name(None, "_id").is_ok() {
+        if input_schema.fields.len() != input_dfschema.fields().len() {
+            return internal_err!(
+                "create_physical_expr expected same number of fields, got \
                      Arrow schema with {}  and DataFusion schema with {}",
-            input_schema.fields.len(),
-            input_dfschema.fields().len()
-        );
+                input_schema.fields.len(),
+                input_dfschema.fields().len()
+            );
+        }
+    } else {
+        // +1 is for the field `_id`
+        if input_schema.fields.len() != input_dfschema.fields().len() + 1 {
+            return internal_err!("`Arrow schema should have an extra `_id` field (arrow: {:?}, DataFusion: {:?})", input_schema, input_dfschema);
+        }
     }
+
     match e {
         Expr::Alias(Alias { expr, .. }) => Ok(create_physical_expr(
             expr,
