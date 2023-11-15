@@ -51,19 +51,22 @@ pub fn create_physical_expr(
     input_schema: &Schema,
     execution_props: &ExecutionProps,
 ) -> Result<Arc<dyn PhysicalExpr>> {
-    if input_dfschema.field_with_name(None, "_id").is_ok() {
-        if input_schema.fields.len() != input_dfschema.fields().len() {
+    if input_schema.fields.len() != input_dfschema.fields().len() {
+        // If `input_schema` and `input_dfschema` get different schemas, then
+        // there is one case where such a inconsistency is allowed, i.e., the
+        // `input_schema` has an extra `_id` field, which is added by us.
+
+        // Is this inconsistency made by us, if not, panic
+        let made_by_us = input_schema.field_with_name("_id").is_ok()
+            && input_dfschema.field_with_name(None, "_id").is_err();
+
+        if !made_by_us {
             return internal_err!(
                 "create_physical_expr expected same number of fields, got \
                      Arrow schema with {}  and DataFusion schema with {}",
                 input_schema.fields.len(),
                 input_dfschema.fields().len()
             );
-        }
-    } else {
-        // +1 is for the field `_id`
-        if input_schema.fields.len() != input_dfschema.fields().len() + 1 {
-            return internal_err!("`Arrow schema should have an extra `_id` field (arrow: {:?}, DataFusion: {:?})", input_schema, input_dfschema);
         }
     }
 
