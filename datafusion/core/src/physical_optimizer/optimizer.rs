@@ -20,7 +20,6 @@
 use std::sync::Arc;
 
 use crate::config::ConfigOptions;
-use crate::physical_optimizer::aggregate_statistics::AggregateStatistics;
 use crate::physical_optimizer::coalesce_batches::CoalesceBatches;
 use crate::physical_optimizer::combine_partial_final_agg::CombinePartialFinalAggregate;
 use crate::physical_optimizer::enforce_distribution::EnforceDistribution;
@@ -72,7 +71,14 @@ impl PhysicalOptimizer {
             // If there is a output requirement of the query, make sure that
             // this information is not lost across different rules during optimization.
             Arc::new(OutputRequirements::new_add_mode()),
-            Arc::new(AggregateStatistics::new()),
+
+            // Disable this optimization rule as:
+            // 1. It won't be used in most queries used by us
+            // 2. Removal of a doc may invalidate the metadata stored in a Parquet
+            //    file, and it is hard to reimplement this rule to make it correctly
+            //    work
+            // Arc::new(AggregateStatistics::new()),
+
             // Statistics-based join selection will change the Auto mode to a real join implementation,
             // like collect left, or hash join, or future sort merge join, which will influence the
             // EnforceDistribution and EnforceSorting rules as they decide whether to add additional
