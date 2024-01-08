@@ -340,14 +340,8 @@ impl PartitionColumnProjector {
             )
         }
 
-        // The metadata stored in `file_batch` will be discarded here in the
-        // previous impl so we have to set it again.
-        let metadata = file_batch.schema().metadata().clone();
-        let mut schema = Schema::clone(&self.projected_schema);
-        schema.metadata = metadata;
-
         RecordBatch::try_new_with_options(
-            Arc::new(schema),
+            Arc::clone(&self.projected_schema),
             cols,
             &RecordBatchOptions::new().with_row_count(Some(file_batch.num_rows())),
         )
