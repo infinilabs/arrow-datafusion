@@ -54,11 +54,11 @@ pub fn create_physical_expr(
     if input_schema.fields.len() != input_dfschema.fields().len() {
         // If `input_schema` and `input_dfschema` get different schemas, then
         // there is one case where such a inconsistency is allowed, i.e., the
-        // `input_schema` has an extra `_id` field, which is added by us.
+        // `input_schema` has an extra `_seq_doc_id` field, which is added by us.
 
         // Is this inconsistency made by us, if not, panic
-        let made_by_us = input_schema.field_with_name("_id").is_ok()
-            && input_dfschema.field_with_name(None, "_id").is_err();
+        let made_by_us = input_schema.field_with_name("_seq_doc_id").is_ok()
+            && input_dfschema.field_with_name(None, "_seq_doc_id").is_err();
 
         if !made_by_us {
             return internal_err!(

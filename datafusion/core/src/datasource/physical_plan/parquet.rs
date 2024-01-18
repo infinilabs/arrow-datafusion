@@ -102,20 +102,20 @@ pub struct ParquetExec {
     /// Optional user defined parquet file reader factory
     parquet_file_reader_factory: Option<Arc<dyn ParquetFileReaderFactory>>,
 
-    /// `true` if the query uses the `_id` field (has this field in its projection)
+    /// `true` if the query uses the `_seq_doc_id` field (has this field in its projection)
     /// then we don't need to manually add one
     ///
     /// For example, for a table with the following schema:
     ///
     /// ```ignore
     /// -------------------
-    /// | _id | foo | bar |
+    /// | _seq_doc_id | foo | bar |
     /// -------------------
     /// ```
     ///
     /// `SELECT * FROM table` would set this field to `true`, `SELECT foo
     /// FROM table` will make it false.
-    involve_field_id: bool,
+    involve_field_seq_doc_id: bool,
 }
 
 impl ParquetExec {
@@ -126,15 +126,15 @@ impl ParquetExec {
         metadata_size_hint: Option<usize>,
     ) -> Self {
         let (projected_schema, ..) = base_config.project();
-        let involve_field_id = projected_schema.index_of("_id").is_ok();
+        let involve_field_seq_doc_id = projected_schema.index_of("_seq_doc_id").is_ok();
 
-        // The query does not involve the `_id` field, so we have to manually
+        // The query does not involve the `_seq_doc_id` field, so we have to manually
         // add it as it is needed in our use case
-        if !involve_field_id {
+        if !involve_field_seq_doc_id {
             let file_schema = &base_config.file_schema;
-            let idx_of_id = file_schema
-                .index_of("_id")
-                .expect("the underlying Parquet file should contain an `_id` field");
+            let idx_of_seq_doc_id = file_schema.index_of("_seq_doc_id").expect(
+                "the underlying Parquet file should contain an `_seq_doc_id` field",
+            );
 
             if let Some(ref mut projection) = base_config.projection {
                 // NOTE:
@@ -143,7 +143,7 @@ impl ParquetExec {
                 // and 3 (`[0, 1, 3]`), but this will make `ProjectionExec.expr`
                 // unmatched, which would give us a wrongly-named RecordBatch,
                 // so we append it here `[0, 3, 1]`.
-                projection.push(idx_of_id);
+                projection.push(idx_of_seq_doc_id);
             }
         }
 
@@ -201,7 +201,7 @@ impl ParquetExec {
             page_pruning_predicate,
             metadata_size_hint,
             parquet_file_reader_factory: None,
-            involve_field_id,
+            involve_field_seq_doc_id,
         }
     }
 
@@ -297,11 +297,11 @@ impl ParquetExec {
             .unwrap_or(config_options.execution.parquet.bloom_filter_enabled)
     }
 
-    /// Return the `involve_field_id` field
+    /// Return the `involve_field_seq_doc_id` field
     ///
-    /// `true` when the query needs the `_id` field (has this field in its projection)
-    pub fn involve_field_id(&self) -> bool {
-        self.involve_field_id
+    /// `true` when the query needs the `_seq_doc_id` field (has this field in its projection)
+    pub fn involve_field_seq_doc_id(&self) -> bool {
+        self.involve_field_seq_doc_id
     }
 }
 

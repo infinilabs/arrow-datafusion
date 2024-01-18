@@ -71,7 +71,6 @@ impl PhysicalOptimizer {
             // If there is a output requirement of the query, make sure that
             // this information is not lost across different rules during optimization.
             Arc::new(OutputRequirements::new_add_mode()),
-
             // Disable this optimization rule as:
             // 1. It won't be used in most queries used by us
             // 2. Removal of a doc may invalidate the metadata stored in a Parquet
